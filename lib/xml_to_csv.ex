@@ -38,6 +38,6 @@ defmodule XmlToCsv do
 
   defp parse_schema(schema_file) do
     [row_xpath | col_xpaths] = File.stream!(schema_file) |> Enum.map(&String.trim/1)
-    {~x[#{row_xpath}]l, col_xpaths |> Enum.map(& ~x[#{&1}])}
+    {~x[#{row_xpath}]l, col_xpaths |> Enum.map(& ~x[#{&1}]o)}
   end
 end
