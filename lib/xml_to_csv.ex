@@ -9,6 +9,7 @@ defmodule XmlToCsv do
     """
   end
   def main([schema_file | files]) do
+    Process.flag(:trap_exit, true)
     bad_files = :ets.new(:bad_files, [{:write_concurrency, true}, :public])
     files
     |> Enum.with_index(1)
@@ -19,9 +20,15 @@ defmodule XmlToCsv do
         err ->
           Logger.error("ERROR: #{file}, #{inspect err}")
           :ets.insert(bad_files, {file, err})
+      catch
+        :exit, err ->
+          Logger.error("ERROR: #{file}, #{inspect err}")
+          :ets.insert(bad_files, {file, err})
       end
     end, max_concurrency: System.schedulers_online, timeout: :infinity)
     |> Enum.to_list
+
+    flush_messages()
 
     case :ets.tab2list(bad_files) do
       [] -> :ok
@@ -33,6 +40,17 @@ defmodule XmlToCsv do
           error "#{index}. #{file}"
         end)
         exit({:shutdown, -1})
+    end
+  end
+
+  defp flush_messages do
+    receive do
+      {:EXIT, _pid, :normal} -> flush_messages()
+      {:EXIT, _pid, reason} ->
+        Logger.error("ERROR: #{inspect reason}")
+        flush_messages()
+    after 0 ->
+      :ok
     end
   end
 
