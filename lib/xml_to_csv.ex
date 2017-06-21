@@ -9,12 +9,30 @@ defmodule XmlToCsv do
     """
   end
   def main([schema_file | files]) do
+    bad_files = ets.new(:bad_files, [{:write_concurrency, true}, :public])
     files
     |> Enum.with_index(1)
     |> Task.async_stream(fn {file, index} ->
-      process_file(file, index, parse_schema(schema_file))
+      try do
+        process_file(file, index, parse_schema(schema_file))
+      rescue
+        err ->
+          :ets.insert(bad_files, {file, err})
+      end
     end, max_concurrency: System.schedulers_online, timeout: :infinity)
     |> Enum.to_list
+
+    case :ets.tab2list(bad_files) do
+      [] -> :ok
+      bad_files ->
+        error "The following files failed to be processed"
+        bad_files
+        |> Enum.with_index(1)
+        |> Enum.each(fn {{file, err}, index} ->
+          error "#{index}. #{file}"
+        end)
+        exit({:shutdown, -1})
+    end
   end
 
   defp process_file(file, index, schema) do
